@@ -44,7 +44,7 @@ export async function register(req, res) {
 
         res.cookie("refreshToken", refreshtoken, {
             httpOnly: true,
-            secure: true,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days       
         }
@@ -70,22 +70,12 @@ export async function getMe(req, res) {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({ message: "Authorizati on token missing" });
+            return res.status(401).json({ message: "Authorization token missing" });
         }
 
         const token = authHeader.split(" ")[1];
         const decoded = jwt.verify(token, config.JWT_SECRET);
-        const userId = decoded?.id;
-        if (!userId) {
-            return res.status(401).json({ message: "Invalid token payload" });
-        }
-
-        const user = await UserModel.findById(userId).select("-password");
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-
-        return res.status(200).json({ user });
+        return res.status(200).json({ decoded });
     } catch (error) {
         return res.status(401).json({ message: "Invalid or expired token" });
     }
@@ -110,7 +100,7 @@ export async function getMe(req, res) {
 
         res.cookie("refreshToken", newRefreshToken, {
             httpOnly: true,
-            secure: true,
+            secure: process.env.NODE_ENV === "production",
             sameSite: "strict",
             maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days       
         }

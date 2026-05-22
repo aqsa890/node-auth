@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      NODE_ENV: test
+      MONGO_URI: mongodb://localhost:27017/node_auth_ci
+      JWT_SECRET: ci_dummy_secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify MongoDB connection
+        run: node -e "import connectDB from './src/config/database.js'; import mongoose from 'mongoose'; await connectDB(); console.log('DB OK'); await mongoose.disconnect();"
+
+      - name: Run API tests
+        run: npm test
