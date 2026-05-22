@@ -36,6 +36,20 @@ export async function register(req, res) {
             { expiresIn: "1d" }
         );
 
+        const refreshtoken = jwt.sign(
+            { id: user._id.toString() },
+            config.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        res.cookie("refreshToken", refreshtoken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "strict",
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days       
+        }
+        )
+
         return res.status(201).json({
             message: "User registered successfully",
             token,
@@ -56,7 +70,7 @@ export async function getMe(req, res) {
     try {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith("Bearer ")) {
-            return res.status(401).json({ message: "Authorization token missing" });
+            return res.status(401).json({ message: "Authorizati on token missing" });
         }
 
         const token = authHeader.split(" ")[1];
@@ -75,4 +89,31 @@ export async function getMe(req, res) {
     } catch (error) {
         return res.status(401).json({ message: "Invalid or expired token" });
     }
+}
+    export async function refreshToken(req, res) {
+        const refreshToken = req.cookies.refreshToken;
+        if (!refreshToken) {
+            return res.status(401).json({ message: "Refresh token missing" });
+        }
+        const decoded = jwt.verify(refreshToken, config.JWT_SECRET);
+        const accessToken = jwt.sign(
+            { id: decoded.id },
+            config.JWT_SECRET,
+            { expiresIn: "15m" }
+        )
+
+        const newRefreshToken = jwt.sign(
+            { id: decoded.id },
+            config.JWT_SECRET,
+            { expiresIn: "7d" }
+        )
+
+        res.cookie("refreshToken", newRefreshToken, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "strict",
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days       
+        }
+        )
+        return res.status(200).json({ token: accessToken });
 }
