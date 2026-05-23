@@ -146,3 +146,72 @@ test("Auth: logout succeeds after refresh-token rotation", async () => {
 
 	await mongoose.disconnect();
 });
+
+test("Auth: login returns access token and sets refresh cookie", async () => {
+	await connectDB();
+	await UserModel.deleteMany({});
+	await sessionModel.deleteMany({});
+
+	const suffix = Date.now();
+	const payload = makeRegisterPayload(suffix);
+
+	await request(app)
+		.post("/api/auth/register")
+		.send(payload);
+
+	const res = await request(app)
+		.post("/api/auth/login")
+		.send({ email: payload.email, password: payload.password });
+
+	assert.equal(res.status, 200);
+	assert.ok(res.body.token, "token should be present");
+	assert.ok(res.body.user?.id, "user.id should be present");
+
+	const setCookie = res.headers["set-cookie"];
+	assert.ok(Array.isArray(setCookie) && setCookie.length > 0, "refreshToken cookie should be set");
+	assert.ok(setCookie.some((c) => c.startsWith("refreshToken=")), "refreshToken cookie should be in Set-Cookie");
+
+	await mongoose.disconnect();
+});
+
+test("Auth: logout-all revokes all active sessions", async () => {
+	await connectDB();
+	await UserModel.deleteMany({});
+	await sessionModel.deleteMany({});
+
+	const suffix = Date.now();
+	const payload = makeRegisterPayload(suffix);
+
+	const registerRes = await request(app)
+		.post("/api/auth/register")
+		.send(payload);
+
+	assert.equal(registerRes.status, 201);
+
+	// Create a second session by logging in from another agent
+	const loginRes = await request(app)
+		.post("/api/auth/login")
+		.send({ email: payload.email, password: payload.password });
+
+	assert.equal(loginRes.status, 200);
+	const token = loginRes.body.token;
+	assert.ok(token);
+
+	const sessionsBefore = await sessionModel.find({});
+	assert.equal(sessionsBefore.length, 2);
+	assert.ok(sessionsBefore.every((s) => s.revoked === false));
+
+	const logoutAllRes = await request(app)
+		.post("/api/auth/logout-all")
+		.set("Authorization", `Bearer ${token}`)
+		.send({});
+
+	assert.equal(logoutAllRes.status, 200);
+	assert.equal(logoutAllRes.body.message, "Logged out from all devices successfully");
+
+	const sessionsAfter = await sessionModel.find({});
+	assert.equal(sessionsAfter.length, 2);
+	assert.ok(sessionsAfter.every((s) => s.revoked === true));
+
+	await mongoose.disconnect();
+});

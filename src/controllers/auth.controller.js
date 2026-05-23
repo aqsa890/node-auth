@@ -4,6 +4,12 @@ import jwt from "jsonwebtoken";
 import config from "../config/config.js";
 import sessionModel from "../models/session.model.js";
 
+function getBearerToken(req) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+    return authHeader.slice("Bearer ".length);
+}
+
 export async function register(req, res) {
     try {
         const { username, email, password } = req.body;
@@ -77,6 +83,74 @@ export async function register(req, res) {
         return res.status(500).json({ message: "Internal server error" });
     }
 
+}
+
+export async function login(req, res) {
+    try {
+        const { email, username, password } = req.body;
+
+        if ((!email && !username) || !password) {
+            return res.status(400).json({ message: "email or username and password are required" });
+        }
+
+        const user = await UserModel.findOne(email ? { email } : { username });
+        if (!user) {
+            return res.status(401).json({ message: "Invalid credentials" });
+        }
+
+        const hashedPassword = crypto
+            .createHash("sha256")
+            .update(password)
+            .digest("hex");
+
+        if (hashedPassword !== user.password) {
+            return res.status(401).json({ message: "Invalid credentials" });
+        }
+
+        const token = jwt.sign(
+            { id: user._id.toString() },
+            config.JWT_SECRET,
+            { expiresIn: "1d" }
+        );
+
+        const refreshToken = jwt.sign(
+            { id: user._id.toString() },
+            config.JWT_SECRET,
+            { expiresIn: "7d" }
+        );
+
+        const refreshTokenHash = crypto
+            .createHash("sha256")
+            .update(refreshToken)
+            .digest("hex");
+
+        await sessionModel.create({
+            userId: user._id,
+            refreshTokenHash,
+            ip: req.ip,
+            userAgent: req.get("user-agent") ?? "unknown",
+        });
+
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 7 * 24 * 60 * 60 * 1000,
+        });
+
+        return res.status(200).json({
+            message: "Logged in successfully",
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+            },
+        });
+    } catch (error) {
+        console.error("Login error:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
 }
 
 export async function getMe(req, res) {
@@ -184,3 +258,30 @@ export async function logout(req, res) {
         return res.status(500).json({ message: "Internal server error" });
     }
 }       
+
+export async function logoutAll(req, res) {
+    try {
+        const token = getBearerToken(req);
+        if (!token) {
+            return res.status(401).json({ message: "Authorization token missing" });
+        }
+
+        let decoded;
+        try {
+            decoded = jwt.verify(token, config.JWT_SECRET);
+        } catch {
+            return res.status(401).json({ message: "Invalid or expired token" });
+        }
+
+        await sessionModel.updateMany(
+            { userId: decoded.id, revoked: false },
+            { $set: { revoked: true } }
+        );
+
+        res.clearCookie("refreshToken");
+        return res.status(200).json({ message: "Logged out from all devices successfully" });
+    } catch (error) {
+        console.error("Logout-all error:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
