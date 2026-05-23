@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import app from "../src/app.js";
 import connectDB from "../src/config/database.js";
 import UserModel from "../src/models/user.model.js";
+import sessionModel from "../src/models/session.model.js";
 
 const makeRegisterPayload = (suffix = Date.now()) => ({
 	username: `user_${suffix}`,
@@ -69,6 +70,7 @@ test("Auth: get-me verifies and decodes access token", async () => {
 test("Auth: refresh-token issues new access token when cookie is present", async () => {
 	await connectDB();
 	await UserModel.deleteMany({});
+	await sessionModel.deleteMany({});
 
 	const agent = request.agent(app);
 
@@ -84,6 +86,63 @@ test("Auth: refresh-token issues new access token when cookie is present", async
 
 	assert.equal(refreshRes.status, 200);
 	assert.ok(refreshRes.body.token, "new access token should be returned");
+
+	await mongoose.disconnect();
+});
+
+test("Auth: logout (GET) clears refresh cookie and revokes session", async () => {
+	await connectDB();
+	await UserModel.deleteMany({});
+	await sessionModel.deleteMany({});
+
+	const agent = request.agent(app);
+
+	const registerRes = await agent
+		.post("/api/auth/register")
+		.send(makeRegisterPayload());
+
+	assert.equal(registerRes.status, 201);
+
+	const logoutRes = await agent
+		.get("/api/auth/logout")
+		.send({});
+
+	assert.equal(logoutRes.status, 200);
+	assert.equal(logoutRes.body.message, "Logged out successfully");
+
+	const sessions = await sessionModel.find({});
+	assert.equal(sessions.length, 1);
+	assert.equal(sessions[0].revoked, true);
+
+	await mongoose.disconnect();
+});
+
+test("Auth: logout succeeds after refresh-token rotation", async () => {
+	await connectDB();
+	await UserModel.deleteMany({});
+	await sessionModel.deleteMany({});
+
+	const agent = request.agent(app);
+
+	const registerRes = await agent
+		.post("/api/auth/register")
+		.send(makeRegisterPayload());
+
+	assert.equal(registerRes.status, 201);
+
+	const refreshRes = await agent
+		.post("/api/auth/refresh-token")
+		.send({});
+
+	assert.equal(refreshRes.status, 200);
+	assert.ok(refreshRes.body.token);
+
+	const logoutRes = await agent
+		.get("/api/auth/logout")
+		.send({});
+
+	assert.equal(logoutRes.status, 200);
+	assert.equal(logoutRes.body.message, "Logged out successfully");
 
 	await mongoose.disconnect();
 });
