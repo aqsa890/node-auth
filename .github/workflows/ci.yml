@@ -21,7 +21,7 @@ jobs:
 
     env:
       NODE_ENV: test
-      MONGO_URI: mongodb://localhost:27017/node_auth_ci
+      MONGO_URI: mongodb://127.0.0.1:27017/node_auth_ci
       JWT_SECRET: ci_dummy_secret
 
     steps:
@@ -38,7 +38,7 @@ jobs:
         run: npm ci
 
       - name: Verify MongoDB connection
-        run: node -e "import connectDB from './src/config/database.js'; import mongoose from 'mongoose'; await connectDB(); console.log('DB OK'); await mongoose.disconnect();"
+        run: node --input-type=module -e "import connectDB from './src/config/database.js'; import mongoose from 'mongoose'; await connectDB(); console.log('DB OK'); await mongoose.disconnect();"
 
-      - name: Run API tests
+      - name: Run auth API tests (register/login/get-me/refresh/logout/logout-all)
         run: npm test
