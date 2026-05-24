@@ -42,5 +42,5 @@ jobs:
       - name: Verify MongoDB connection
         run: node --input-type=module -e "import connectDB from './src/config/database.js'; import mongoose from 'mongoose'; await connectDB(); console.log('DB OK'); await mongoose.disconnect();"
 
-      - name: Run API tests
+      - name: Run API tests (auth + media)
         run: npm test

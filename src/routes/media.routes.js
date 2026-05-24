@@ -40,11 +40,11 @@ router.post("/runUpload", runUpload, createMedia);
 // Update (replace) an existing image/video
 router.put("/:id", runUpload, updateMedia);
 
-router.delete("/:id", deleteMedia);
-
 // Delete all media for the current user (requires Authorization: Bearer <token>)
 router.delete("/", requireAuth, deleteAllMedia);
 router.delete("/deleteAll", requireAuth, deleteAllMedia);
+
+router.delete("/:id", deleteMedia);
 
 export default router;
 
