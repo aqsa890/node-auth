@@ -23,6 +23,8 @@ jobs:
       NODE_ENV: test
       MONGO_URI: mongodb://127.0.0.1:27017/node_auth_ci
       JWT_SECRET: ci_dummy_secret
+      # Optional: only needed if you add media upload tests that hit Cloudinary.
+      CLOUDINARY_URL: "${{ secrets.CLOUDINARY_URL }}"
 
     steps:
       - name: Checkout
@@ -40,5 +42,5 @@ jobs:
       - name: Verify MongoDB connection
         run: node --input-type=module -e "import connectDB from './src/config/database.js'; import mongoose from 'mongoose'; await connectDB(); console.log('DB OK'); await mongoose.disconnect();"
 
-      - name: Run auth API tests (register/login/get-me/refresh/logout/logout-all)
+      - name: Run API tests
         run: npm test

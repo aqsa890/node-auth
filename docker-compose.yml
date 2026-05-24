@@ -8,3 +8,6 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
+      - CLOUD_NAME=${CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
